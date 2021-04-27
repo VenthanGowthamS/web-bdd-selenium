@@ -1,59 +1,77 @@
 # web-bdd-selenium
 
-**Behaviour-driven browser automation for a login flow, using Cucumber, Selenium WebDriver and Gradle.**
+**Behaviour-driven browser tests for a login flow: plain-English scenarios, real Chrome, one command.**
 
-This is one of my early test-automation projects (2021). The tests are written as readable scenarios and driven with data tables, so one scenario covers several sets of credentials.
+The scenarios describe what a user expects. Each step drives a real browser with Selenium and checks what actually appears on the page. The suite runs against [the-internet.herokuapp.com/login](https://the-internet.herokuapp.com/login), a public practice site built for test automation, so anyone can clone it and run it.
 
 ## What it tests
 
 ```gherkin
-@smoke
-Scenario Outline: Login functionality validation
-  Given I want to launch by "<URL>" in chrome browser
-  When I enter username in discovery login page as "<Name>"
-  Then I enter my valid password as "<Password>"
-  And I click the login button
+Feature: Login
+  Background:
+    Given I am on the login page
 
-  Examples:
-    | URL | Name | Password |
-    | ... | ...  | ...      |
+  @smoke
+  Scenario: Valid credentials open the secure area
+    When I log in as "tomsmith" with password "SuperSecretPassword!"
+    Then I should be in the secure area
+    And I should see the message "You logged into a secure area!"
+
+  @regression
+  Scenario Outline: Invalid credentials are rejected
+    When I log in as "<username>" with password "<password>"
+    Then I should still be on the login page
+    And I should see the message "<message>"
+
+    Examples:
+      | username  | password             | message                   |
+      | wronguser | SuperSecretPassword! | Your username is invalid! |
+      | tomsmith  | wrongpassword        | Your password is invalid! |
+      |           |                      | Your username is invalid! |
+
+  @regression
+  Scenario: Logging out returns me to the login page
 ```
 
-| Scenario | Tag | Status |
+| Scenario | Tag | What it proves |
 |---|---|---|
-| Valid login (data-driven, several users) | `@smoke` | Implemented: opens Chrome, fills the form through a page object and submits |
-| Invalid login shows a failure | `@regression` | Scenario written, step definitions still stubbed (unfinished) |
+| Valid login | `@smoke` | The right user reaches the secure area and is told so |
+| Invalid login × 3 | `@regression` | Wrong username, wrong password and empty form are all rejected, and the user stays on the login page |
+| Logout | `@regression` | Logging out really ends the session and says so |
 
-The test data in the feature file is sample data for practice, not real accounts.
+The credentials are the practice site's public demo account, not real ones.
 
 ## How it's built
 
-| Piece | File | Role |
-|---|---|---|
-| Feature file | `src/test/resources/Discovery.feature` | Gherkin scenarios with `Scenario Outline` + `Examples` tables |
-| Runner | `src/test/java/discoveryProject/discoveryrunner.java` | JUnit Cucumber runner: picks features, glue and tags, writes an HTML report to `target/cucumber` |
-| Step definitions | `src/test/java/gluecodes/stepdefinition.java` | Glue code: starts ChromeDriver and maps each sentence to browser actions |
-| Page object | `src/test/java/pages/loginpage.java` | Login screen elements (username, password, login button) |
+```
+src/test/
+├── resources/features/login.feature   ← scenarios in plain English
+└── java/login/
+    ├── runner/RunCucumberTest.java    ← JUnit entry point, HTML report
+    ├── steps/LoginSteps.java          ← each sentence → browser actions + assertions
+    ├── steps/Hooks.java               ← open/close Chrome; screenshot on failure
+    ├── pages/LoginPage.java           ← page object: form, flash message
+    ├── pages/SecureAreaPage.java      ← page object: secure area, logout
+    └── support/DriverFactory.java     ← Chrome setup, headless option
+```
 
-**Stack:** Java · Selenium WebDriver 3.141 · Cucumber-JVM 1.2 · JUnit 4 · Gradle
+- **Page Object Model:** locators live in one place per page, so steps read like the scenario.
+- **Explicit waits:** the tests wait for the page state they need, with no fixed sleeps.
+- **No driver binary in the repo:** WebDriverManager fetches the ChromeDriver that matches your Chrome.
+- **Evidence on failure:** a screenshot is attached to the report when a scenario fails.
+
+**Stack:** Java 8+ · Selenium WebDriver 3.141 · Cucumber-JVM 6.10 · JUnit 4 · WebDriverManager · Gradle
 
 ## Run it
 
-1. Install Chrome and a matching [ChromeDriver](https://googlechromelabs.github.io/chrome-for-testing/) on your `PATH`. The binary is no longer stored in this repo.
-2. Run:
+You need Java and Google Chrome.
 
-   ```bash
-   ./gradlew test
-   ```
+```bash
+./gradlew test                                   # all scenarios, visible browser
+./gradlew test -Dheadless=true                   # no window (CI)
+./gradlew test -Dcucumber.filter.tags="@smoke"   # just the smoke test
+```
 
-3. Open the HTML report at `target/cucumber/index.html`.
+The report is written to `build/reports/cucumber/report.html`.
 
-To run a different set of scenarios, change `tags` in the runner (for example `@smoke`).
-
-## What I'd do differently today
-
-- Finish the negative-login steps and assert on the error message.
-- Upgrade to current Cucumber (`io.cucumber`) and Selenium 4, which manages drivers itself.
-- Load test credentials from environment variables instead of the feature file.
-
-These early suites taught me to test behaviour, not just code. That's the same idea behind my AI agent evaluation work in [agent-evals-lab](https://github.com/VenthanGowthamS/agent-evals-lab).
+Optional settings: `-DbaseUrl=` to point at another environment, and `-Dchromedriver=/path/to/chromedriver` to use a driver you already have.
