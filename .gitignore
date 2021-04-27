@@ -1,5 +1,17 @@
-# Ignore Gradle project-specific cache directory
+# Gradle
 .gradle
-
-# Ignore Gradle build output directory
 build
+bin/
+
+# Build / report output
+target/
+
+# Drivers (install ChromeDriver on PATH instead)
+*.exe
+
+# IDE files
+.project
+.classpath
+.settings/
+.idea/
+*.iml
